@@ -1,6 +1,7 @@
 import random
+from typing import Optional 
 
-from tile import *
+from acquisitions.game_logic.tile import *
 
 class PlayerState:
     def __init__(self, name: str, money: int=6000, property=None, tiles=None):
@@ -19,6 +20,6 @@ class BankState:
         self.tiles = [Tile(r, c) for r in range(NUM_ROWS) for c in range(NUM_COLS)]
         random.shuffle(self.tiles)
 
-    def draw_tile(self):
-        return self.tiles.pop()
+    def draw_tile(self) -> Optional[Tile]:
+        return self.tiles.pop() if self.tiles else None
     

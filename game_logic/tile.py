@@ -1,4 +1,4 @@
-from constants import *
+from acquisitions.game_logic.constants import *
 
 class Tile:
     def __init__(self, row: int, col: int):
@@ -14,6 +14,10 @@ class Tile:
     def __repr__(self):
         row_char = chr(self.row + ord('A'))
         return f"{row_char}{self.col}"
+    
+    def __str__(self):
+        row_char = chr(self.row + ord('A'))
+        return f"{row_char}{self.col}"
 
     @classmethod
     def from_str(cls, s: str):
@@ -24,8 +28,8 @@ class Tile:
         """
         if len(s) == 2 or len(s) == 3:
             r = s[0]
-            c = s[1] # TODO
-            if r.isalpha() and c.isdigit():
+            c = s[1:]
+            if r.isalpha() and c[0].isdigit() and c[-1].isdigit():
                 print("Input okay")
                 row = ord(r.upper()) - ord('A')
                 col = int(c)
