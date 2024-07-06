@@ -41,8 +41,10 @@ class GameOrchestrator:
         self.handle_game_event(player, tile, game_event)
 
     def execute_purchases(self, player: PlayerState):
-        print("Skipping execute purchases")
-        return  # TODO
+        buy_order = get_buy_order_from_user()
+        # TODO - handle invalid transactions here
+        self.bank.execute_transaction(player, buy_order, self.board_state.hotel_sizes)
+        player.display_property()
 
     def handle_game_event(self, player: PlayerState, tile: Tile, game_event: GameEvent):
         if game_event == GameEvent.NOOP:
@@ -71,7 +73,7 @@ class GameOrchestrator:
                 self.bank.draw_tile(player)
 
     def handle_merger(self, player: PlayerState, tile: Tile):
-        can_merge, majority_options, multiway, hotels = self.board_state.check_merger(tile)
+        can_merge, majority_options, hotels = self.board_state.check_merger(tile)
         if not can_merge:
             return self.board_state.mark_dead_tile(tile)
         print("A merger has occurred!")
@@ -83,4 +85,17 @@ class GameOrchestrator:
             hotels.remove(hotel)
             hotels.insert(0, hotel)
         print(f"Merging {hotels[1:]} into {hotels[0]}")
+        for hotel in hotels[1:]:
+            self.execute_liquidity_event(hotel, hotels[0])
         return self.board_state.execute_merger(tile, hotels)
+    
+    def execute_liquidity_event(
+            self, liquidated_hotel: Hotel, owning_hotel: Hotel):
+        size = self.board_state.hotel_sizes[liquidated_hotel.value]
+        self.bank.grant_awards(self.players, liquidated_hotel, size)
+        # TODO - this should be sorted by ownership
+        for player in self.players:
+            sell, twofer = get_liquidation_option_from_user(
+                player.name, player.property[liquidated_hotel.value])
+            self.bank.liquidate_shares(player, liquidated_hotel, size, sell, twofer, owning_hotel)
+    

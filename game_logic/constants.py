@@ -7,12 +7,13 @@ NUM_COLS = 4
 
 # Player parameters
 TILES_PER_PLAYER = 6
+MAX_SHARES_PER_TURN = 3
 
 # Hotel parameters
 NUM_HOTELS = 7  # There are 7 types of hotels
 TOTAL_SHARES = 25  # There are 25 available shares per hotel
 MAX_MERGEABLE_SIZE = 11  # Hotels with size > 11 cannot be merged
-SIZE_BRACKETS = [1, 2, 3, 4, 5, 6, 12, 21, 31, 41]
+SIZE_BRACKETS = [2, 3, 4, 5, 11, 21, 31, 41]
 BASE_PRICE = 200
 PRICE_INCR = 100
 
@@ -29,6 +30,9 @@ class Hotel(Enum):
     def __str__(self):
         return f"{self.name[:2]}" if self.value < NUM_HOTELS else "XX"
     
+    def __repr__(self):
+        return f"{self.name}"
+    
     @classmethod
     def from_str(cls, s: str):
         if len(s) >= 2:
@@ -38,19 +42,20 @@ class Hotel(Enum):
                     return hotel
         return cls.NO_HOTEL
         
-
-
 def share_price(hotel: Hotel, size: int):
     """
     Share price is a function of hotel level and size
     """
-    if hotel.name.value <= 1:
+    if size < 2:
+        return 0
+    
+    if hotel.value <= 1:
         level = 2
-    elif hotel.name.value <= 4:
+    elif hotel.value <= 4:
         level = 1
     else:
         level = 0
-    price = BASE_PRICE + PRICE_INCR * level()
+    price = BASE_PRICE + PRICE_INCR * level
     for val in SIZE_BRACKETS:
         if size <= val:
             break
@@ -68,7 +73,4 @@ class GameEvent(Enum):
     NOOP = 0
     JOIN_CHAIN = 1
     START_CHAIN = 2
-    DEAD_TILE = 3
     MERGER = 4
-    TIEBREAK_MERGER = 5
-    MULTIWAY_MERGER = 6

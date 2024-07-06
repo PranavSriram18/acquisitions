@@ -1,4 +1,4 @@
-from typing import List 
+from typing import List, Tuple 
 
 from acquisitions.game_logic.constants import *
 from acquisitions.game_logic.tile import *
@@ -27,3 +27,23 @@ def get_hotel_from_user(hotels: List[Hotel]) -> Hotel:
             break
         print("Invalid selection.")
     return hotel
+
+def get_buy_order_from_user() -> List[int]:
+    buy_order = [0] * NUM_HOTELS
+    # TODO - more descriptive instructions here
+    s = input("Enter purchase: ").split(',')
+    for x in s:
+        x = x.strip()
+        hotel = Hotel.from_str(x[0:2])
+        quantity = int(x[-1])
+        assert(hotel.value < NUM_HOTELS)
+        buy_order[hotel.value] = quantity 
+    return buy_order
+
+def get_liquidation_option_from_user(name: str, num_shares: int) -> Tuple[int, int]:
+    strs = input(f"{name}, you have {num_shares} shares. Enter sell, twofer: ").split(',')
+    sell = int(strs[0].strip())
+    twofer = int(strs[1].strip())
+    return sell, twofer
+
+
