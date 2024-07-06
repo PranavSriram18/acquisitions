@@ -13,13 +13,4 @@ class PlayerState:
 
     def has_tile(self, tile: Tile) -> bool:
         return tile in self.tiles
-
-class BankState:
-    def __init__(self):
-        self.property = [TOTAL_SHARES] * NUM_HOTELS
-        self.tiles = [Tile(r, c) for r in range(NUM_ROWS) for c in range(NUM_COLS)]
-        random.shuffle(self.tiles)
-
-    def draw_tile(self) -> Optional[Tile]:
-        return self.tiles.pop() if self.tiles else None
     

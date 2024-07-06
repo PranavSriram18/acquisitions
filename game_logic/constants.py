@@ -68,6 +68,7 @@ class GameEvent(Enum):
     NOOP = 0
     JOIN_CHAIN = 1
     START_CHAIN = 2
-    MERGER = 3
-    DEAD_TILE = 4
-    MULTIWAY_MERGER = 5
+    DEAD_TILE = 3
+    MERGER = 4
+    TIEBREAK_MERGER = 5
+    MULTIWAY_MERGER = 6

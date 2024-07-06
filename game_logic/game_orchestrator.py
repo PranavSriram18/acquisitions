@@ -5,13 +5,13 @@ from acquisitions.game_logic.tile import *
 from acquisitions.game_logic.board_state import *
 from acquisitions.game_logic.bank import *
 from acquisitions.ui.render import *
+from acquisitions.ui.user_input import *
 
 class GameOrchestrator:
     def __init__(self, player_names: List[str]):
         self.players = [PlayerState(name) for name in player_names]
         self.bank = BankState()
         self.board_state = BoardState()
-        self.game_ended = False
         self.n_players = len(self.players)
         self.init_tiles()
     
@@ -21,7 +21,7 @@ class GameOrchestrator:
         """
         for turn in range(NUM_ROWS * NUM_COLS):
             self.play_turn(turn % self.n_players)
-        self.calculate_scores()
+        self.bank.tally_scores(self.players, self.board_state.hotel_sizes)
 
     def play_turn(self, player_id: int):
         render_board_text(self.board_state.board)
@@ -29,21 +29,10 @@ class GameOrchestrator:
         tile = self.get_tile(player)
         self.place_tile(player, tile)
         self.execute_purchases(player)
-        self.draw_tile(player)
+        self.bank.draw_tile(player)
 
     def get_tile(self, player: PlayerState) -> Tile:
-        received_valid_tile = False 
-        while not received_valid_tile:
-            tile_str = input(f"Enter a tile, {player.name}. Your available tiles are {player.tiles}\n")
-            tile = Tile.from_str(tile_str)
-            if not tile.is_valid():
-                print(f"Invalid tile string; input must be 2-3 characters" 
-                    "e.g. A0, B7, etc. and must be between A0 and I11")
-                continue
-            if not player.has_tile(tile):
-                print(f"Player {player.name} does not have tile {tile}, try again.")
-                continue
-            received_valid_tile = True
+        tile = get_tile_from_user(player)
         player.tiles.remove(tile)
         return tile
 
@@ -55,18 +44,13 @@ class GameOrchestrator:
         print("Skipping execute purchases")
         return  # TODO
 
-    def draw_tile(self, player: PlayerState):
-        tile = self.bank.draw_tile()
-        if tile:
-            player.tiles.append(tile)
-
     def handle_game_event(self, player: PlayerState, tile: Tile, game_event: GameEvent):
+        if game_event == GameEvent.NOOP:
+            return
         if game_event == GameEvent.START_CHAIN:
             return self.start_chain(player, tile)
-        elif game_event == GameEvent.DEAD_TILE:
-            return self.board_state.mark_dead_tile(tile)
         elif game_event == GameEvent.MERGER:
-            print("A merger has occurred!")
+            return self.handle_merger(player, tile)
         else:
             print("Skipping handling tile event")  # TODO
         return
@@ -76,25 +60,27 @@ class GameOrchestrator:
         if not available_hotels:
             print("No available hotels to start.")
             return
-        # TODO - move this block to ui
         print(f"Congratulations {player.name}, you can start a hotel.")
-        while True:
-            print(f"Available hotels: {available_hotels}")
-            user_selection = input("Enter first 2 letters of hotel you wish to "
-                                    "start, or XX for no hotel: ")
-            hotel = Hotel.from_str(user_selection)
-            if hotel in available_hotels:
-                break
-            print("invalid selection")
-        # User gets 1 free share of this hotel
+        hotel = get_hotel_from_user(available_hotels)
         self.bank.issue_free_share(player, hotel)
-        # Board state needs to be updated
         self.board_state.mark_recursive(tile, hotel)
 
     def init_tiles(self):
         for player in self.players:
             for _ in range(TILES_PER_PLAYER):
-                self.draw_tile(player)
+                self.bank.draw_tile(player)
 
-    def calculate_scores(self):
-        pass  # TODO
+    def handle_merger(self, player: PlayerState, tile: Tile):
+        can_merge, majority_options, multiway, hotels = self.board_state.check_merger(tile)
+        if not can_merge:
+            return self.board_state.mark_dead_tile(tile)
+        print("A merger has occurred!")
+        if len(majority_options) > 1:
+            print(f"Due to a tie, {player.name}" 
+                  "must select which hotel *remains* on the board.")
+            hotel = get_hotel_from_user(majority_options)
+            # move this hotel to the front
+            hotels.remove(hotel)
+            hotels.insert(0, hotel)
+        print(f"Merging {hotels[1:]} into {hotels[0]}")
+        return self.board_state.execute_merger(tile, hotels)

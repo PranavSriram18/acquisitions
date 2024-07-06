@@ -30,59 +30,51 @@ class BoardState:
         self.board = [[CellState() for _ in range(NUM_COLS)] for _ in range(NUM_ROWS)]
         self.hotel_sizes = [0] * NUM_HOTELS
 
-        # TODO - auxiliary tracking structures
-
     def place_tile(self, tile: Tile) -> GameEvent:
         """
         pre: tile must be a valid Tile that hasn't been placed before.
         """
         cell = self.cell(tile)
         neighbor_cells = self.get_neighbor_cells(tile)
-        neighbor_hotels = list(set(c.hotel for c in neighbor_cells if c.hotel != Hotel.NO_HOTEL))
-        num_neighboring_hotels = len(neighbor_hotels)
+        neighbor_hotels = self.get_neighbor_hotels(tile)
+        num_neighbor_hotels = len(neighbor_hotels)
         cell.occupied = True
 
-        if num_neighboring_hotels == 0:
-            # Case 0: isolated tile
-            if not any(nc.occupied for nc in neighbor_cells):
-                return GameEvent.NOOP  
+        if num_neighbor_hotels == 0:
+            # Case 0: isolated tile (all neighbors empty or dead)
+            if not any(nc.occupied and not nc.dead_zone for nc in neighbor_cells):
+                return GameEvent.NOOP
             else:
-                # Case 1: starts a chain
+                # Case 1: possibly starts a chain
                 return GameEvent.START_CHAIN
-        elif num_neighboring_hotels == 1:
+        elif num_neighbor_hotels == 1:
             # Case 2: absorbed into existing chain
             self.mark_recursive(tile, neighbor_hotels[0])
             return GameEvent.JOIN_CHAIN
-        elif num_neighboring_hotels == 2:
-            return self.execute_merger(tile, neighbor_hotels)
         else:
-            # TODO - check if merge is possible
-            # For now disallow multiway merges
-            can_merge = False
-            if can_merge:
-                return GameEvent.MULTIWAY_MERGER
+            return GameEvent.MERGER
             
     def available_hotels(self) -> List[Hotel]:
         return [hotel for hotel in Hotel if hotel.value < Hotel.NO_HOTEL.value and self.hotel_sizes[hotel.value] == 0]
     
-    def execute_merger(self, tile: Tile, neighbor_hotels: List[Hotel]):
-        h0, h1 = neighbor_hotels[0], neighbor_hotels[1]
-        s0, s1 = self.hotel_sizes[h0.value], self.hotel_sizes[h1.value]
+    def check_merger(self, tile: Tile):
+        neighbor_hotels = self.get_neighbor_hotels(tile)
+        sizes = [self.hotel_sizes[nh.value] for nh in neighbor_hotels]
+        can_merge = sizes[1] <= MAX_MERGEABLE_SIZE
+        multiway = len(neighbor_hotels)
+        majority_options = [h for (h, sz) in zip(neighbor_hotels, sizes) if sz == sizes[0]]
+        return can_merge, majority_options, multiway, neighbor_hotels
 
-        # Check if merge is possible
-        can_merge = (s0 <= MAX_MERGEABLE_SIZE or s1 <= MAX_MERGEABLE_SIZE)
-        if not can_merge:
-            return GameEvent.DEAD_TILE
-        
-        # merge smaller into larger. TODO - handle equality case
-        if s0 < s1:
-            s0, s1 = s1, s0
-            h0, h1 = h1, h0
 
-        # h0 is now larger hotel
-        self.mark_recursive(tile, h0)
-        self.hotel_sizes[h1.value] = 0 
-        return GameEvent.MERGER
+    def execute_merger(self, tile: Tile, hotels: List[Hotel]):
+        """
+        pre: check_merger has been run and can_merge is True.
+        pre: hotels sorted in descending order of size, with tiebreaks
+        selected by player.
+        """
+        self.mark_recursive(tile, hotels[0])
+        for i in range(1, len(hotels)):
+            self.hotel_sizes[hotels[i].value] = 0 
         
     def mark_recursive(self, tile: Tile, hotel: Hotel):
         self.cell(tile).occupied = True
@@ -115,6 +107,12 @@ class BoardState:
         
     def get_neighbor_cells(self, tile: Tile) -> List[CellState]:
         return [self.cell(nt) for nt in self.get_neighbor_tiles(tile)]
+    
+    def get_neighbor_hotels(self, tile: Tile) -> List[Hotel]:
+        neighbor_cells = self.get_neighbor_cells(tile)
+        neighbor_hotels = list(set(c.hotel for c in neighbor_cells if c.hotel != Hotel.NO_HOTEL))
+        neighbor_hotels.sort(key=lambda x: -self.hotel_sizes[x.value])
+        return neighbor_hotels
        
     def cell(self, tile: Tile):
         """Get the cell state for the given tile."""
