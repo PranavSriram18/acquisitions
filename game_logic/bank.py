@@ -25,41 +25,44 @@ class BankState:
             self, 
             player: PlayerState, 
             buy_order: List[int],
-            hotel_sizes: List[int]) -> bool:
+            hotel_sizes: List[int]) -> Tuple[bool, str]:
         """ 
         buy_order is a list of quantities of each share player wants.
         """
-        valid, cost = self.validate_transaction(player, buy_order, hotel_sizes)
+        valid, cost, msg = self.validate_transaction(player, buy_order, hotel_sizes)
         if not valid:
-            return False    
+            return False, msg    
         player.money -= cost
         for i in range(NUM_HOTELS):
             player.property[i] += buy_order[i]
             self.property[i] -= buy_order[i]
-        return True
+        msg += f"Property for {player.name}: {player.property}"
+        return True, msg
 
     def validate_transaction(
             self, 
             player: PlayerState, 
             buy_order: List[int],
-            hotel_sizes: List[int]) -> Tuple[bool, int]:
+            hotel_sizes: List[int]) -> Tuple[bool, int, str]:
         share_prices = [share_price(hotel, size) for (hotel, size) in zip(Hotel, hotel_sizes)]
         total_shares = sum(buy_order)
         if total_shares > MAX_SHARES_PER_TURN:
-            print(f"Transaction rejected. Max {MAX_SHARES_PER_TURN} can be purchased in one turn.")
-            return False, 0            
+            msg = f"Transaction rejected. Max {MAX_SHARES_PER_TURN} can be purchased in one turn. Please try again."
+            return False, 0, msg            
         cost = 0
         for (hotel, num_shares, size, price) in zip(Hotel, buy_order, hotel_sizes, share_prices):
             if size == 0 and num_shares > 0:
-                print(f"Transaction rejected; attempt to purchase {hotel.name}, which is not on board")
+                msg = f"Transaction rejected; attempt to purchase {hotel.name}, which is not on board. Please try again."
+                return False, 0, msg
             if num_shares > self.property[hotel.value]:
-                print(f"Transaction rejected; only {self.property[hotel.value]} shares of {hotel.name} available.")
-                return False, 0
+                msg = f"Transaction rejected; only {self.property[hotel.value]} shares of {hotel.name} available. Please try again."
+                return False, 0, msg
             cost += num_shares * price
         if cost > player.money:
-            print("Transaction rejected; player has insufficient funds")
-            return False, 0
-        return True, cost
+            msg = "Transaction rejected; player has insufficient funds. Please try again."
+            return False, 0, msg
+        msg = "Transaction successful!"
+        return True, cost, msg
     
     def grant_awards(self, players: List[PlayerState], hotel: Hotel, size):
         pass # TODO
@@ -71,23 +74,22 @@ class BankState:
             size: int,
             sell: int, 
             twofer: int, 
-            owning_hotel: Hotel) -> bool:
+            owning_hotel: Hotel) -> Tuple[bool, str]:
         # validation
         transaction_shares = sell + twofer 
         if transaction_shares > player.property[liquidated_hotel.value]:
-            print(f"{player.name} does not have enough shares for this transaction")
-            return False
+            msg = f"{player.name} does not have enough shares for this transaction. Please try again."
+            return False, msg
         
         if twofer % 2:
-            print("Rolling over remainder of twofer to sell")
+            msg = "Rolling over remainder of twofer to sell"
             twofer -= 1
             sell += 1
 
         owning_hotel_shares = twofer // 2
         if self.property[owning_hotel.value] < owning_hotel_shares:
-            print(f"Rejecting transaction; bank has insufficient shares of" 
-                  f"{owning_hotel.name} for selected twofer")
-            return False
+            msg = f"Rejecting transaction; bank has insufficient shares of {owning_hotel.name} for selected twofer. Please try again."
+            return False, msg
         
         # execution
         price = share_price(liquidated_hotel, size)
@@ -95,17 +97,13 @@ class BankState:
         player.property[liquidated_hotel.value] -= transaction_shares
         self.property[liquidated_hotel.value] += transaction_shares
         player.property[owning_hotel.value] += owning_hotel_shares
-        self.property[owning_hotel.value] -= owning_hotel_shares    
+        self.property[owning_hotel.value] -= owning_hotel_shares
+        return True, "success"    
 
     def tally_scores(self, players: List[PlayerState], hotel_sizes: List[int]):
         for (hotel, size) in zip(Hotel, hotel_sizes):
             if hotel.value < NUM_HOTELS:
                 self.liquidate_all(players, hotel, hotel_sizes[hotel.value])
-        print("Final scores: ")
-        for player in players:
-            print(f"{player.name}: {player.money}")
-        
-
 
     def liquidate_all(
             self, players: List[PlayerState], hotel: Hotel, size: int):

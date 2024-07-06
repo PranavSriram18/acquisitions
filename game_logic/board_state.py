@@ -64,7 +64,6 @@ class BoardState:
         majority_options = [h for (h, sz) in zip(neighbor_hotels, sizes) if sz == sizes[0]]
         return can_merge, majority_options, neighbor_hotels
 
-
     def execute_merger(self, tile: Tile, hotels: List[Hotel]):
         """
         pre: check_merger has been run and can_merge is True.

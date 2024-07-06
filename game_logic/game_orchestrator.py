@@ -4,27 +4,25 @@ from acquisitions.game_logic.player import *
 from acquisitions.game_logic.tile import *
 from acquisitions.game_logic.board_state import *
 from acquisitions.game_logic.bank import *
-from acquisitions.ui.render import *
-from acquisitions.ui.user_input import *
+from acquisitions.ui.ui_interface import *
+from acquisitions.ui.text_ui import *
 
 class GameOrchestrator:
-    def __init__(self, player_names: List[str]):
+    def __init__(self, player_names: List[str], ui: BaseUI):
         self.players = [PlayerState(name) for name in player_names]
         self.bank = BankState()
         self.board_state = BoardState()
-        self.n_players = len(self.players)
+        self.ui = ui
         self.init_tiles()
     
     def play(self):
-        """
-        Core game loop.
-        """
+        """Core game loop."""
         for turn in range(NUM_ROWS * NUM_COLS):
-            self.play_turn(turn % self.n_players)
+            self.play_turn(turn % len(self.players))
         self.bank.tally_scores(self.players, self.board_state.hotel_sizes)
 
     def play_turn(self, player_id: int):
-        render_board_text(self.board_state.board)
+        self.ui.render_board(self.board_state.board)
         player = self.players[player_id]
         tile = self.get_tile(player)
         self.place_tile(player, tile)
@@ -32,7 +30,7 @@ class GameOrchestrator:
         self.bank.draw_tile(player)
 
     def get_tile(self, player: PlayerState) -> Tile:
-        tile = get_tile_from_user(player)
+        tile = self.ui.get_tile_from_user(player)
         player.tiles.remove(tile)
         return tile
 
@@ -41,10 +39,13 @@ class GameOrchestrator:
         self.handle_game_event(player, tile, game_event)
 
     def execute_purchases(self, player: PlayerState):
-        buy_order = get_buy_order_from_user()
-        # TODO - handle invalid transactions here
-        self.bank.execute_transaction(player, buy_order, self.board_state.hotel_sizes)
-        player.display_property()
+        while 1:
+            buy_order = self.ui.get_buy_order_from_user(player)
+            success, msg = self.bank.execute_transaction(
+                player, buy_order, self.board_state.hotel_sizes)
+            self.ui.display_message(msg)
+            if success:
+                return
 
     def handle_game_event(self, player: PlayerState, tile: Tile, game_event: GameEvent):
         if game_event == GameEvent.NOOP:
@@ -54,16 +55,15 @@ class GameOrchestrator:
         elif game_event == GameEvent.MERGER:
             return self.handle_merger(player, tile)
         else:
-            print("Skipping handling tile event")  # TODO
+            self.ui.display_message("Skipping handling tile event")  # TODO
         return
     
     def start_chain(self, player: PlayerState, tile: Tile):
         available_hotels = self.board_state.available_hotels()
         if not available_hotels:
-            print("No available hotels to start.")
+            self.ui.display_message("No available hotels to start.")
             return
-        print(f"Congratulations {player.name}, you can start a hotel.")
-        hotel = get_hotel_from_user(available_hotels)
+        hotel = self.ui.get_hotel_from_user(player, available_hotels)
         self.bank.issue_free_share(player, hotel)
         self.board_state.mark_recursive(tile, hotel)
 
@@ -76,16 +76,17 @@ class GameOrchestrator:
         can_merge, majority_options, hotels = self.board_state.check_merger(tile)
         if not can_merge:
             return self.board_state.mark_dead_tile(tile)
-        print("A merger has occurred!")
+        self.ui.display_message("A merger has occurred!")
         if len(majority_options) > 1:
-            print(f"Due to a tie, {player.name}" 
+            self.ui.display_message(f"Due to a tie, {player.name}" 
                   "must select which hotel *remains* on the board.")
-            hotel = get_hotel_from_user(majority_options)
+            hotel = self.ui.get_hotel_from_user(majority_options)
             # move this hotel to the front
             hotels.remove(hotel)
             hotels.insert(0, hotel)
-        print(f"Merging {hotels[1:]} into {hotels[0]}")
+        self.ui.display_message(f"Merging {hotels[1:]} into {hotels[0]}")
         for hotel in hotels[1:]:
+            # TODO - should this merge order be backwards?
             self.execute_liquidity_event(hotel, hotels[0])
         return self.board_state.execute_merger(tile, hotels)
     
@@ -93,9 +94,14 @@ class GameOrchestrator:
             self, liquidated_hotel: Hotel, owning_hotel: Hotel):
         size = self.board_state.hotel_sizes[liquidated_hotel.value]
         self.bank.grant_awards(self.players, liquidated_hotel, size)
-        # TODO - this should be sorted by ownership
-        for player in self.players:
-            sell, twofer = get_liquidation_option_from_user(
-                player.name, player.property[liquidated_hotel.value])
-            self.bank.liquidate_shares(player, liquidated_hotel, size, sell, twofer, owning_hotel)
+        # players liquidate in decreasing order of ownership
+        ownership = [p.property[liquidated_hotel.value] for p in self.players]
+        for (player, shares) in sorted(zip(self.players, ownership), key=lambda x:-x[1]):
+            while 1:
+                sell, twofer = self.ui.get_user_liquidation_option(player.name, shares)
+                success, msg = self.bank.liquidate_shares(
+                    player, liquidated_hotel, size, sell, twofer, owning_hotel)
+                self.ui.display_message(msg)
+                if success:
+                    break
     
