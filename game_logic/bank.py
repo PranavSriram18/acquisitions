@@ -30,11 +30,12 @@ class BankState:
         """
         valid, cost, msg = self.validate_transaction(player, buy_order, hotel_sizes)
         if not valid:
-            return False, msg    
+            return False, msg
         player.money -= cost
-        for i in range(NUM_HOTELS):
-            player.property[i] += buy_order[i]
-            self.property[i] -= buy_order[i]
+        msg += f"Awarding the following shares: \n"
+        for (hotel, shares) in filter(lambda p: p[1], zip(Hotel, buy_order)):
+            msg += f"{hotel.name}: {shares}, "
+            self.transfer(player, hotel, shares)
         return True, msg
 
     def validate_transaction(
@@ -45,21 +46,37 @@ class BankState:
         share_prices = [share_price(hotel, size) for (hotel, size) in zip(Hotel, hotel_sizes)]
         total_shares = sum(buy_order)
         if total_shares > MAX_SHARES_PER_TURN:
-            msg = f"Transaction rejected. Max {MAX_SHARES_PER_TURN} can be purchased in one turn. Please try again."
-            return False, 0, msg            
+            msg = f"Transaction rejected.\n Max {MAX_SHARES_PER_TURN} can be purchased in one turn. Please try again."
+            return False, 0, msg 
+        if any(x < 0 for x in buy_order):
+            msg = (
+                f"Transaction rejected. Cannot have negative "
+                f"entries in buy order. Please try again."
+            )
+            return False, 0, msg
+
         cost = 0
         for (hotel, num_shares, size, price) in zip(Hotel, buy_order, hotel_sizes, share_prices):
             if size == 0 and num_shares > 0:
-                msg = f"Transaction rejected; attempt to purchase {hotel.name}, which is not on board. Please try again."
+                msg = (
+                    f"Transaction rejected; attempt to purchase {hotel.name} "
+                    f"which is not on board. Please try again."
+                )
                 return False, 0, msg
             if num_shares > self.property[hotel.value]:
-                msg = f"Transaction rejected; only {self.property[hotel.value]} shares of {hotel.name} available. Please try again."
+                msg = (
+                    f"Transaction rejected; only {self.property[hotel.value]} "
+                    f"shares of {hotel.name} available. Please try again."
+                )
                 return False, 0, msg
             cost += num_shares * price
         if cost > player.money:
-            msg = "Transaction rejected; player has insufficient funds. Please try again."
+            msg = (
+                f"Transaction rejected; player has insufficient funds.\n"
+                f"Please try again."
+            )
             return False, 0, msg
-        msg = "Transaction successful!"
+        msg = f"Transaction valid!\n"
         return True, cost, msg
     
     def grant_awards(self, players: List[PlayerState], hotel: Hotel, size):
@@ -87,7 +104,10 @@ class BankState:
         
         majority_bonus = majority_holder_award(hotel, size)
         minority_bonus = minority_holder_award(hotel, size)
-        msg += f"Majority and minority awards are {majority_bonus} and {minority_bonus}.\n"
+        msg += (
+            f"Majority and minority awards are "
+            f"{majority_bonus} and {minority_bonus}.\n"
+        )
         num_majority_holders = sum(1 for x in ranking if x[1] == ranking[0][1])
         if num_majority_holders >= 2:  # Case 1
             msg += f"Splitting majority bonus among: "
@@ -98,11 +118,12 @@ class BankState:
                 msg += f"{ranking[i][0].name}, "
             return
         # Cases 2-4
-        msg += f"Awarding majority bonus to: {ranking[0][0].name} "
+        msg += f"Awarding majority bonus to: {ranking[0][0].name}\n"
         ranking[0][0].money += majority_bonus
         num_minority_holders = sum(1 for x in ranking if x[1] == ranking[1][1] and x[1] > 0)
         if num_minority_holders == 0:  # Case 2
-            msg += f"No minority holders; awarding minority bonus to majority holder {ranking[0][0].name}"
+            msg += f"No minority holders; awarding minority bonus " \
+                 f"to {ranking[0][0].name}"
             ranking[0][0].money += minority_bonus
             return msg
         # Cases 3 and 4
@@ -126,7 +147,10 @@ class BankState:
         msg = ""
         transaction_shares = sell + twofer 
         if transaction_shares > player.property[liquidated_hotel.value]:
-            msg = f"{player.name} does not have enough shares for this transaction. Please try again."
+            msg = (
+                f"{player.name} does not have enough shares for this"
+                f"transaction. Please try again."
+            )
             return False, msg
         
         if twofer % 2:
@@ -135,19 +159,31 @@ class BankState:
 
         owning_hotel_shares = twofer // 2
         if self.property[owning_hotel.value] < owning_hotel_shares:
-            msg = f"Rejecting transaction; bank has insufficient shares of {owning_hotel.name} for selected twofer. Please try again."
+            msg = (
+                f"Rejecting transaction; bank has insufficient shares of" 
+                f"{owning_hotel.name} for selected twofer. Please try again."
+            )
             return False, msg
         
         # execution
         player.money += share_price(liquidated_hotel, size) * sell
         self.transfer(player, liquidated_hotel, -transaction_shares)
         self.transfer(player, owning_hotel, owning_hotel_shares)
-        return True, msg+"Liquidation successful"
+        return True, msg + f"\nLiquidation successful"
 
-    def tally_scores(self, players: List[PlayerState], hotel_sizes: List[int]):
+    def tally_scores(
+            self, players: List[PlayerState], hotel_sizes: List[int]) -> str:
         for (hotel, size) in zip(Hotel, hotel_sizes):
             if hotel.value < NUM_HOTELS:
                 self.liquidate_all(players, hotel, hotel_sizes[hotel.value])
+        msg = f"Final scores:\n "
+        scores = [p.money for p in players]
+        rankings = sorted(zip(players, scores), key=lambda x: -x[1])
+        for (player, money) in rankings:
+            msg += f"{player.name}: {money} \n"
+        # TODO - handle ties
+        msg += f"The winner is: {rankings[0][0].name}. Congratulations!"
+        return msg
 
     def liquidate_all(
             self, players: List[PlayerState], hotel: Hotel, size: int):

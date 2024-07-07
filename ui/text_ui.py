@@ -14,13 +14,7 @@ class TextUI(BaseUI):
         print("Current board: \n\n")
         for r in range(NUM_ROWS):
             for c in range(NUM_COLS):
-                cell_state = cell_states[r][c]
-                if cell_state.occupied:
-                    print(cell_state.hotel, end=" ")
-                elif cell_state.dead_zone:
-                    print("ZZ", end=" ")
-                else:
-                    print(Tile(r, c), end=" ")
+                print(cell_states[r][c])
             print("\n")
 
     def display_message(self, msg: str):
@@ -60,7 +54,7 @@ class TextUI(BaseUI):
             print("Invalid selection.")
         return hotel
 
-    def get_buy_order_from_user(self, player: PlayerState) -> List[int]:
+    def get_buy_order_from_user(self, player: PlayerState, hotels: List[Hotel]) -> List[int]:
         buy_order = [0] * NUM_HOTELS
         # TODO - more descriptive instructions here
         s = input("Enter purchase: ").split(',')
@@ -78,11 +72,3 @@ class TextUI(BaseUI):
         twofer = int(strs[1].strip())
         return sell, twofer
     
-    def display_final_scores(self, players: List[PlayerState]):
-        print("Final scores: ")
-        scores = [p.money for p in players]
-        rankings = sorted(zip(players, scores), key=lambda x: -x[1])
-        for (player, money) in rankings:
-            print(f"{player.name}: {money}")
-        # TODO - handle ties
-        print(f"The winner is: {rankings[0]}. Congratulations!")

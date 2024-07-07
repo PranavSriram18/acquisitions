@@ -20,17 +20,25 @@ class GameOrchestrator:
     def play(self):
         """Core game loop."""
         self.ui.run()
+        self.ui.display_message("Welcome! Beginning Acquisitions game.")
         for turn in range(NUM_ROWS * NUM_COLS):
+            print(f"Playing turn {turn}")
             self.play_turn(self.players[turn % len(self.players)])
-        self.bank.tally_scores(self.players, self.board_state.hotel_sizes)
-        self.ui.display_final_scores(self.players)
+        self.handle_game_end()
 
     def play_turn(self, player: PlayerState):
+        print("In play turn; rendering board")
         self.ui.render_board(self.board_state.board)
         tile = self.get_tile(player)
         self.place_tile(player, tile)
+        self.ui.render_board(self.board_state.board)
         self.execute_purchases(player)
         self.bank.draw_tile(player)
+
+    def init_tiles(self):
+        for player in self.players:
+            for _ in range(TILES_PER_PLAYER):
+                self.bank.draw_tile(player)
 
     def get_tile(self, player: PlayerState) -> Tile:
         tile = self.ui.get_tile_from_user(player)
@@ -52,7 +60,7 @@ class GameOrchestrator:
             self.ui.display_message("No hotels on board; skipping purchases")
             return
         while 1:
-            buy_order = self.ui.get_buy_order_from_user(player)
+            buy_order = self.ui.get_buy_order_from_user(player, hotels)
             success, msg = self.bank.execute_transaction(
                 player, buy_order, self.board_state.hotel_sizes)
             self.ui.display_message(msg)
@@ -70,11 +78,6 @@ class GameOrchestrator:
         self.bank.issue_free_share(player, hotel)
         self.board_state.mark_recursive(tile, hotel)
 
-    def init_tiles(self):
-        for player in self.players:
-            for _ in range(TILES_PER_PLAYER):
-                self.bank.draw_tile(player)
-
     def handle_merger(self, player: PlayerState, tile: Tile):
         can_merge, majority_options, hotels = self.board_state.check_merger(tile)
         if not can_merge:
@@ -87,7 +90,7 @@ class GameOrchestrator:
             # move this hotel to the front
             hotels.remove(hotel)
             hotels.insert(0, hotel)
-        self.ui.display_message(f"Merging {hotels[1:]} into {hotels[0]}")
+        self.ui.display_message(f"Merging {hotels[1:]} into {hotels[0].name}")
         for hotel in hotels[1:]:
             # TODO - should this merge order be backwards?
             self.execute_liquidity_event(hotel, hotels[0])
@@ -108,4 +111,8 @@ class GameOrchestrator:
                 self.ui.display_message(msg)
                 if success:
                     break
+    
+    def handle_game_end(self):
+        msg = self.bank.tally_scores(self.players, self.board_state.hotel_sizes)
+        self.ui.display_message(msg)
     

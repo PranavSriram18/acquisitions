@@ -4,66 +4,239 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acquisitions Board Game</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #game-board {
+            display: grid;
+            gap: 2px;
+            margin-bottom: 20px;
+        }
+        .cell {
+            border: 1px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        select, button, input {
+            margin: 10px 0;
+            padding: 5px;
+        }
+        #game-info {
+            margin-top: 20px;
+            max-width: 600px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     <h1>Acquisitions</h1>
     <div id="game-container">
-        <div id="game-board">
-            <table id="board-table">
-                <!-- The board will be dynamically inserted here -->
-            </table>
-        </div>
-        <div id="game-info">
-            <!-- Game information will be displayed here -->
-        </div>
+        <div id="game-board"></div>
+        <div id="game-info"></div>
+        <div id="user-input"></div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        let boardDimensions;
+        let lastInputRequired = null;
+
         function updateGameState() {
-            $.getJSON('/get_game_state', function(data) {
-                renderBoard(data.board);
-                updateGameInfo(data.info);
-            });
+            fetch('/get_game_state')
+                .then(response => response.json())
+                .then(data => {
+                    if (!boardDimensions) {
+                        boardDimensions = data.board_dimensions;
+                        setupBoardCSS(boardDimensions);
+                    }
+                    renderBoard(data.board);
+                    updateMessages(data.messages);
+                    
+                    // Only update user input if it's different from last time
+                    if (data.input_required && JSON.stringify(data.input_required) !== JSON.stringify(lastInputRequired)) {
+                        showUserInput(data.input_required);
+                        lastInputRequired = data.input_required;
+                    }
+                });
+        }
+
+        function setupBoardCSS(dimensions) {
+            const board = document.getElementById('game-board');
+            board.style.gridTemplateColumns = `repeat(${dimensions.cols}, 60px)`;
+            const cells = document.getElementsByClassName('cell');
+            for (let cell of cells) {
+                cell.style.width = '60px';
+                cell.style.height = '60px';
+            }
         }
 
         function renderBoard(boardData) {
-            let html = '';
-            for (let r = 0; r < boardData.length; r++) {
-                html += '<tr>';
-                for (let c = 0; c < boardData[r].length; c++) {
-                    let cell = boardData[r][c];
-                    html += '<td class="';
-                    if (cell.occupied) {
-                        html += 'occupied ' + cell.hotel.toLowerCase();
-                    } else if (cell.dead_zone) {
-                        html += 'dead-zone';
-                    } else {
-                        html += 'empty';
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            if (boardData) {
+                for (let row of boardData) {
+                    for (let cell of row) {
+                        const cellElement = document.createElement('div');
+                        cellElement.className = 'cell';
+                        cellElement.textContent = cell.content;
+                        if (cell.occupied) {
+                            cellElement.style.backgroundColor = getHotelColor(cell.content);
+                            cellElement.style.color = 'white';
+                        } else if (cell.dead_zone) {
+                            cellElement.style.backgroundColor = 'gray';
+                        }
+                        board.appendChild(cellElement);
                     }
-                    html += '">';
-                    if (cell.occupied) {
-                        html += cell.hotel.substring(0, 2);
-                    } else if (cell.dead_zone) {
-                        html += 'ZZ';
-                    } else {
-                        html += r + '-' + c;
-                    }
-                    html += '</td>';
                 }
-                html += '</tr>';
             }
-            $('#board-table').html(html);
         }
 
-        function updateGameInfo(info) {
-            $('#game-info').html(info);
+        function showUserInput(inputData) {
+            const userInputDiv = document.getElementById('user-input');
+            let html = '';
+            let currentValue = '';
+            
+            // If there's already a select element, save its current value
+            const existingSelect = document.getElementById('input-select');
+            if (existingSelect) {
+                currentValue = existingSelect.value;
+            }
+
+            if (JSON.stringify(inputData) === JSON.stringify(lastInputRequired)) {
+                return; // Don't update if the input hasn't changed
+            }
+
+            if (inputData.type === 'tile') {
+                html = `<p>${inputData.player}, select a tile:</p>
+                        <select id="input-select">
+                            ${inputData.available_tiles.map(tile => 
+                                `<option value="${tile}" ${tile === currentValue ? 'selected' : ''}>${tile}</option>`
+                            ).join('')}
+                        </select>
+                        <button id="submit-button">Submit</button>`;
+            } else if (inputData.type === 'hotel') {
+                html = `<p>${inputData.player}, select a hotel:</p>
+                        <select id="input-select">
+                            ${inputData.available_hotels.map(hotel => 
+                                `<option value="${hotel}" ${hotel === currentValue ? 'selected' : ''}>${hotel}</option>`
+                            ).join('')}
+                        </select>
+                        <button id="submit-button">Submit</button>`;
+            } else if (inputData.type === 'buy_order') {
+                html = `<p>${inputData.player}, enter buy order:</p>
+                        <form id="buy-order-form">
+                            ${inputData.available_hotels.map(hotel => {
+                                const currentValue = document.getElementById(`${hotel}-input`) ? 
+                                    document.getElementById(`${hotel}-input`).value : '0';
+                                return `<label>${hotel}: <input type="number" id="${hotel}-input" name="${hotel}" min="0" value="${currentValue}"></label><br>`;
+                            }).join('')}
+                            <button type="button" id="submit-button">Submit</button>
+                        </form>`;
+            } else if (inputData.type === 'liquidation') {
+                html = `<p>${inputData.player}, enter liquidation options for ${inputData.num_shares} shares:</p>
+                        <form id="liquidation-form">
+                            <label>Sell: <input type="number" id="sell-input" name="sell" min="0" max="${inputData.num_shares}" value="0"></label><br>
+                            <label>Twofer: <input type="number" id="twofer-input" name="twofer" min="0" max="${Math.floor(inputData.num_shares/2)}" value="0"></label><br>
+                            <button type="button" id="submit-button">Submit</button>
+                        </form>`;
+            }
+            document.getElementById('user-input').innerHTML = html;
+            console.log("Generated HTML:", html);
+            userInputDiv.innerHTML = html;
+
+            // Add event listener to the submit button
+            document.getElementById('submit-button').addEventListener('click', function() {
+                submitInput(inputData.type);
+            });
+
+            lastInputRequired = inputData;
         }
 
-        $(document).ready(function() {
-            updateGameState();
-            setInterval(updateGameState, 1000);  // Update every second
-        });
+        function submitInput(type) {
+            let data = {};
+            
+            if (type === 'tile' || type === 'hotel') {
+                const select = document.getElementById('input-select');
+                if (!select) {
+                    console.error('Select element not found for ' + type);
+                    return;
+                }
+                console.log("Selected value:", select.value);
+                console.log("All options:", Array.from(select.options).map(opt => opt.value));
+                data[type] = select.value;
+            } else if (type === 'buy_order') {
+                const form = document.getElementById('buy-order-form');
+                if (!form) {
+                    console.error('Buy order form not found');
+                    return;
+                }
+                data.buy_order = {};
+                for (let input of form.elements) {
+                    if (input.type === 'number') {
+                        data.buy_order[input.name] = parseInt(input.value) || 0;
+                    }
+                }
+            } else if (type === 'liquidation') {
+                const form = document.getElementById('liquidation-form');
+                if (!form) {
+                    console.error('Liquidation form not found');
+                    return;
+                }
+                const sellInput = form.elements['sell'];
+                const twoferInput = form.elements['twofer'];
+                if (!sellInput || !twoferInput) {
+                    console.error('Liquidation inputs not found');
+                    return;
+                }
+                data.sell = parseInt(sellInput.value) || 0;
+                data.twofer = parseInt(twoferInput.value) || 0;
+            } else {
+                console.error('Unknown input type: ' + type);
+                return;
+            }
+
+            console.log('Submitting data:', data);
+
+            fetch('/make_move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            })
+            .then(response => response.json())
+            .then(responseData => {
+                console.log('Move submitted:', responseData);
+                document.getElementById('user-input').innerHTML = '';
+                lastInputRequired = null;  // Reset lastInputRequired
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function getHotelColor(hotel) {
+            const colors = {
+                'CO': 'lightblue',
+                'IM': 'lightpink',
+                'AM': 'navy',
+                'FE': 'lightgreen',
+                'WO': 'brown',
+                'LE': 'deeppink',
+                'TO': 'tan'
+            };
+            return colors[hotel] || 'white';
+        }
+
+        function updateMessages(messages) {
+            document.getElementById('game-info').innerHTML = messages.join('<br>');
+        }
+
+        setInterval(updateGameState, 500);
     </script>
 </body>
 </html>

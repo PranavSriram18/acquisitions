@@ -17,14 +17,30 @@ class CellState:
     self.hotel is NO_HOTEL in all cases except case 2
     self.dead_zone is False in all cases except case 3
     """
-    def __init__(self):
-        self.occupied = False
-        self.hotel = Hotel.NO_HOTEL
-        self.dead_zone = False
+    def __init__(self, occupied=False, hotel=Hotel.NO_HOTEL, dead_zone=False, tile=None):
+        self.occupied = occupied
+        self.hotel = hotel
+        self.dead_zone = dead_zone
+        self.tile = tile
+
+    def __str__(self):
+        if not self.occupied:
+            return str(self.tile)
+        elif self.dead_zone:
+            return "ZZ"
+        elif self.hotel != Hotel.NO_HOTEL:
+            return self.hotel.name[0:2]
+        else:
+            return "XX"
+        
+    def __repr__(self):
+        return self.__str__()
+        
 
 class BoardState:
     def __init__(self):
-        self.board = [[CellState() for _ in range(NUM_COLS)] for _ in range(NUM_ROWS)]
+        self.board = [[CellState(
+            tile=Tile(r, c)) for c in range(NUM_COLS)] for r in range(NUM_ROWS)]
         self.hotel_sizes = [0] * (NUM_HOTELS + 1)
 
     def place_tile(self, tile: Tile) -> GameEvent:
@@ -53,10 +69,10 @@ class BoardState:
             return GameEvent.MERGER  # case 3
         
     def hotels_on_board(self) -> List[Hotel]:
-        return [hotel for hotel in Hotel if hotel.value < NUM_HOTELS and self.hotel_sizes[hotel.value] > 0]
+        return [h for h in Hotel if h.value < NUM_HOTELS and self.hotel_sizes[h.value] > 0]
             
     def available_hotels(self) -> List[Hotel]:
-        return [hotel for hotel in Hotel if hotel.value < NUM_HOTELS and self.hotel_sizes[hotel.value] == 0]
+        return [h for h in Hotel if h.value < NUM_HOTELS and self.hotel_sizes[h.value] == 0]
     
     def check_merger(self, tile: Tile) -> Tuple[bool, List[Hotel], List[Hotel]]:
         neighbor_hotels = self.get_neighbor_hotels(tile)
@@ -101,6 +117,7 @@ class BoardState:
         cell.occupied = True
         cell.hotel = Hotel.NO_HOTEL
         cell.dead_zone = True
+        cell.tile = tile
 
     def get_neighbor_tiles(self, tile: Tile) -> List[Tile]:
         """Get the tiles neighboring the given tile."""

@@ -37,13 +37,9 @@ class BaseUI(ABC):
         pass
 
     @abstractmethod
-    def get_buy_order_from_user(self, player: PlayerState) -> List[int]:
+    def get_buy_order_from_user(self, player: PlayerState, hotels: List[Hotel]) -> List[int]:
         pass
 
     @abstractmethod
     def get_user_liquidation_option(self, name: str, num_shares: int) -> Tuple[int, int]:
-        pass
-
-    @abstractmethod
-    def display_final_scores(self, players: List[PlayerState]):
         pass

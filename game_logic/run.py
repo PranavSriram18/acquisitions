@@ -11,4 +11,4 @@ def main(player_names: List[str], use_web_ui: bool = False):
     game.play()
 
 if __name__=="__main__":
-    main(["Alice", "Bob"], False)
+    main(["Alice", "Bob"], True)
