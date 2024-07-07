@@ -9,6 +9,14 @@ from acquisitions.ui.ui_interface import *
 
 class BaseUI(ABC):
     @abstractmethod
+    def run(self):
+        pass
+
+    @abstractmethod
+    def set_game_orchestrator(g):
+        pass
+    
+    @abstractmethod
     def render_board(self, cell_states):
         pass
 

@@ -6,6 +6,7 @@ from acquisitions.game_logic.board_state import *
 from acquisitions.game_logic.bank import *
 from acquisitions.ui.ui_interface import *
 from acquisitions.ui.text_ui import *
+from acquisitions.ui.web_ui import *
 
 class GameOrchestrator:
     def __init__(self, player_names: List[str], ui: BaseUI):
@@ -13,11 +14,12 @@ class GameOrchestrator:
         self.bank = BankState()
         self.board_state = BoardState()
         self.ui = ui
+        self.ui.set_game_orchestrator(self)
         self.init_tiles()
     
     def play(self):
         """Core game loop."""
-        self.ui.display_initial()
+        self.ui.run()
         for turn in range(NUM_ROWS * NUM_COLS):
             self.play_turn(self.players[turn % len(self.players)])
         self.bank.tally_scores(self.players, self.board_state.hotel_sizes)

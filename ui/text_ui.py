@@ -7,12 +7,9 @@ from acquisitions.game_logic.board_state import *
 from acquisitions.ui.ui_interface import *
 
 class TextUI(BaseUI):
-    def display_initial(self):
+    def run(self):
         print("Starting game!")
 
-    """
-    Basic text rendering of board in terminal.
-    """
     def render_board(self, cell_states: List[List[CellState]]):
         print("Current board: \n\n")
         for r in range(NUM_ROWS):

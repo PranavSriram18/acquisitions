@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acquisitions Board Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Acquisitions</h1>
+    <div id="game-container">
+        <div id="game-board">
+            <table id="board-table">
+                <!-- The board will be dynamically inserted here -->
+            </table>
+        </div>
+        <div id="game-info">
+            <!-- Game information will be displayed here -->
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        function updateGameState() {
+            $.getJSON('/get_game_state', function(data) {
+                renderBoard(data.board);
+                updateGameInfo(data.info);
+            });
+        }
+
+        function renderBoard(boardData) {
+            let html = '';
+            for (let r = 0; r < boardData.length; r++) {
+                html += '<tr>';
+                for (let c = 0; c < boardData[r].length; c++) {
+                    let cell = boardData[r][c];
+                    html += '<td class="';
+                    if (cell.occupied) {
+                        html += 'occupied ' + cell.hotel.toLowerCase();
+                    } else if (cell.dead_zone) {
+                        html += 'dead-zone';
+                    } else {
+                        html += 'empty';
+                    }
+                    html += '">';
+                    if (cell.occupied) {
+                        html += cell.hotel.substring(0, 2);
+                    } else if (cell.dead_zone) {
+                        html += 'ZZ';
+                    } else {
+                        html += r + '-' + c;
+                    }
+                    html += '</td>';
+                }
+                html += '</tr>';
+            }
+            $('#board-table').html(html);
+        }
+
+        function updateGameInfo(info) {
+            $('#game-info').html(info);
+        }
+
+        $(document).ready(function() {
+            updateGameState();
+            setInterval(updateGameState, 1000);  // Update every second
+        });
+    </script>
+</body>
+</html>
