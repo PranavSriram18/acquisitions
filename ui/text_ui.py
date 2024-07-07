@@ -7,6 +7,9 @@ from acquisitions.game_logic.board_state import *
 from acquisitions.ui.ui_interface import *
 
 class TextUI(BaseUI):
+    def display_initial(self):
+        print("Starting game!")
+
     """
     Basic text rendering of board in terminal.
     """
@@ -17,6 +20,8 @@ class TextUI(BaseUI):
                 cell_state = cell_states[r][c]
                 if cell_state.occupied:
                     print(cell_state.hotel, end=" ")
+                elif cell_state.dead_zone:
+                    print("ZZ", end=" ")
                 else:
                     print(Tile(r, c), end=" ")
             print("\n")
@@ -30,6 +35,9 @@ class TextUI(BaseUI):
             if num_shares > 0:
                 print(f"{hotel.name}: {num_shares}")
         print(f"Cash: {player.money}")
+
+    def display_event(self, player, tile, game_event):
+        pass # TODO
 
     def get_tile_from_user(self, player: PlayerState) -> Tile:
         while True:
@@ -46,7 +54,6 @@ class TextUI(BaseUI):
         return tile 
 
     def get_hotel_from_user(self, player: PlayerState, hotels: List[Hotel]) -> Hotel:
-        print(f"Congratulations {player.name}, you can start a hotel.")
         while True:
             print(f"Select a hotel from the following options: {hotels}")
             user_selection = input("Enter first 2 letters of hotel selection, or XX for no hotel: ")
@@ -77,7 +84,8 @@ class TextUI(BaseUI):
     def display_final_scores(self, players: List[PlayerState]):
         print("Final scores: ")
         scores = [p.money for p in players]
-        rankings = sorted(zip(players, scores), lambda x: -x[1])
+        rankings = sorted(zip(players, scores), key=lambda x: -x[1])
         for (player, money) in rankings:
-            print(f"{player.name}: money")
+            print(f"{player.name}: {money}")
+        # TODO - handle ties
         print(f"The winner is: {rankings[0]}. Congratulations!")

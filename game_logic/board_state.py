@@ -22,9 +22,6 @@ class CellState:
         self.hotel = Hotel.NO_HOTEL
         self.dead_zone = False
 
-    def __repr__(self):
-        pass
-
 class BoardState:
     def __init__(self):
         self.board = [[CellState() for _ in range(NUM_COLS)] for _ in range(NUM_ROWS)]
@@ -33,29 +30,33 @@ class BoardState:
     def place_tile(self, tile: Tile) -> GameEvent:
         """
         pre: tile must be a valid Tile that hasn't been placed before.
+        There are 4 cases:
+        0. Isolated tile (all neighbors empty or dead)
+        1. Possibly starts a chain
+        2. Absorbed into existing chain
+        3. Merger
         """
         cell = self.cell(tile)
         neighbor_cells = self.get_neighbor_cells(tile)
         neighbor_hotels = self.get_neighbor_hotels(tile)
         num_neighbor_hotels = len(neighbor_hotels)
         cell.occupied = True
-
         if num_neighbor_hotels == 0:
-            # Case 0: isolated tile (all neighbors empty or dead)
             if not any(nc.occupied and not nc.dead_zone for nc in neighbor_cells):
-                return GameEvent.NOOP
+                return GameEvent.NOOP  # case 0
             else:
-                # Case 1: possibly starts a chain
-                return GameEvent.START_CHAIN
+                return GameEvent.START_CHAIN  # case 1
         elif num_neighbor_hotels == 1:
-            # Case 2: absorbed into existing chain
             self.mark_recursive(tile, neighbor_hotels[0])
-            return GameEvent.JOIN_CHAIN
+            return GameEvent.JOIN_CHAIN  # case 2
         else:
-            return GameEvent.MERGER
+            return GameEvent.MERGER  # case 3
+        
+    def hotels_on_board(self) -> List[Hotel]:
+        return [hotel for hotel in Hotel if hotel.value < NUM_HOTELS and self.hotel_sizes[hotel.value] > 0]
             
     def available_hotels(self) -> List[Hotel]:
-        return [hotel for hotel in Hotel if hotel.value < Hotel.NO_HOTEL.value and self.hotel_sizes[hotel.value] == 0]
+        return [hotel for hotel in Hotel if hotel.value < NUM_HOTELS and self.hotel_sizes[hotel.value] == 0]
     
     def check_merger(self, tile: Tile) -> Tuple[bool, List[Hotel], List[Hotel]]:
         neighbor_hotels = self.get_neighbor_hotels(tile)
@@ -80,7 +81,6 @@ class BoardState:
         map all non-deadzone tiles it is connected to as also belonging to the
         given hotel. 
         """
-        self.cell(tile).occupied = True
         q = deque([tile])
         while q:
             curr_tile = q.pop()

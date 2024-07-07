@@ -12,9 +12,11 @@ class BaseUI(ABC):
     def render_board(self, cell_states):
         pass
 
+    @abstractmethod
     def display_message(self, msg: str):
         pass
 
+    @abstractmethod
     def display_property(self, player: PlayerState):
         pass
 
@@ -22,12 +24,18 @@ class BaseUI(ABC):
     def get_tile_from_user(self, player: PlayerState) -> Tile:
         pass
 
+    @abstractmethod
     def get_hotel_from_user(self, player: PlayerState, hotels: List[Hotel]) -> Hotel:
         pass
 
+    @abstractmethod
     def get_buy_order_from_user(self, player: PlayerState) -> List[int]:
         pass
 
+    @abstractmethod
     def get_user_liquidation_option(self, name: str, num_shares: int) -> Tuple[int, int]:
         pass
 
+    @abstractmethod
+    def display_final_scores(self, players: List[PlayerState]):
+        pass

@@ -18,8 +18,7 @@ class BankState:
     
     def issue_free_share(self, player: PlayerState, hotel: Hotel):
         if self.property[hotel.value] > 0:
-            player.property[hotel.value] += 1
-            self.property[hotel.value] -= 1
+            self.transfer(player, hotel, 1)
 
     def execute_transaction(
             self, 
@@ -36,7 +35,6 @@ class BankState:
         for i in range(NUM_HOTELS):
             player.property[i] += buy_order[i]
             self.property[i] -= buy_order[i]
-        msg += f"Property for {player.name}: {player.property}"
         return True, msg
 
     def validate_transaction(
@@ -65,7 +63,56 @@ class BankState:
         return True, cost, msg
     
     def grant_awards(self, players: List[PlayerState], hotel: Hotel, size):
-        pass # TODO
+        """
+        In the most common case, the player with the most shares of hotel
+        receives a majority award, and the player with the 2nd most shares
+        receives a minority award. However, there are several tricky edge cases
+        to deal with. We enumerate all cases below:
+        Case 0: No one has any shares of the hotel (extremely rare). Then no one
+        gets an award.
+        Case 1: 2 or more players tied for 1st. They split the total 
+        (majority+minority) bonus.
+        Case 2: 1 winner, rest of players have 0 shares. The winner receives
+        both majority and minority bonuses.
+        Case 3: The common case; 1 winner and 1 runner-up.
+        Case 4: 1 winner, 2 or more players tied for runner up. The runners up
+        split the minority bonus.
+        """
+        ownership = [p.property[hotel.value] for p in players]
+        ranking = sorted(zip(players, ownership), key=lambda x: -x[1])
+        msg = f"Granting awards for {hotel.name}.\n"
+        if ranking[0][1] == 0:
+            msg += f"No shareholders of {hotel.name}"
+            return msg  # Case 0
+        
+        majority_bonus = majority_holder_award(hotel, size)
+        minority_bonus = minority_holder_award(hotel, size)
+        msg += f"Majority and minority awards are {majority_bonus} and {minority_bonus}.\n"
+        num_majority_holders = sum(1 for x in ranking if x[1] == ranking[0][1])
+        if num_majority_holders >= 2:  # Case 1
+            msg += f"Splitting majority bonus among: "
+            bonus_per_winner = (majority_bonus + minority_bonus) // num_majority_holders
+            bonus_per_winner = (bonus_per_winner // 100) * 100  # round to nearest 100
+            for i in range(num_majority_holders):
+                ranking[i][0].money += bonus_per_winner
+                msg += f"{ranking[i][0].name}, "
+            return
+        # Cases 2-4
+        msg += f"Awarding majority bonus to: {ranking[0][0].name} "
+        ranking[0][0].money += majority_bonus
+        num_minority_holders = sum(1 for x in ranking if x[1] == ranking[1][1] and x[1] > 0)
+        if num_minority_holders == 0:  # Case 2
+            msg += f"No minority holders; awarding minority bonus to majority holder {ranking[0][0].name}"
+            ranking[0][0].money += minority_bonus
+            return msg
+        # Cases 3 and 4
+        bonus_per_runnerup = minority_bonus // num_minority_holders
+        bonus_per_runnerup = (bonus_per_runnerup // 100) * 100
+        msg += f"Awarding minority grant to: " 
+        for i in range(1, num_minority_holders+1):
+            msg += f"{ranking[i][0].name}, "
+            ranking[i][0].money += bonus_per_runnerup
+        return msg
 
     def liquidate_shares(
             self, 
@@ -76,15 +123,15 @@ class BankState:
             twofer: int, 
             owning_hotel: Hotel) -> Tuple[bool, str]:
         # validation
+        msg = ""
         transaction_shares = sell + twofer 
         if transaction_shares > player.property[liquidated_hotel.value]:
             msg = f"{player.name} does not have enough shares for this transaction. Please try again."
             return False, msg
         
         if twofer % 2:
-            msg = "Rolling over remainder of twofer to sell"
-            twofer -= 1
-            sell += 1
+            msg = "Rolling over remainder of twofer to sell\n"
+            twofer, sell = twofer-1, sell+1
 
         owning_hotel_shares = twofer // 2
         if self.property[owning_hotel.value] < owning_hotel_shares:
@@ -92,13 +139,10 @@ class BankState:
             return False, msg
         
         # execution
-        price = share_price(liquidated_hotel, size)
-        player.money += price * sell
-        player.property[liquidated_hotel.value] -= transaction_shares
-        self.property[liquidated_hotel.value] += transaction_shares
-        player.property[owning_hotel.value] += owning_hotel_shares
-        self.property[owning_hotel.value] -= owning_hotel_shares
-        return True, "success"    
+        player.money += share_price(liquidated_hotel, size) * sell
+        self.transfer(player, liquidated_hotel, -transaction_shares)
+        self.transfer(player, owning_hotel, owning_hotel_shares)
+        return True, msg+"Liquidation successful"
 
     def tally_scores(self, players: List[PlayerState], hotel_sizes: List[int]):
         for (hotel, size) in zip(Hotel, hotel_sizes):
@@ -111,3 +155,12 @@ class BankState:
         share_value = share_price(hotel, size)
         for player in players:
             player.money += share_value * player.property[hotel.value]
+
+    def transfer(self, player: PlayerState, hotel: Hotel, k: int):
+        """
+        Transfer k shares *from* bank *to* player. 
+        Negative value of k means transfer of |k| from player to bank.
+        pre: all validation done prior to this call.
+        """
+        player.property[hotel.value] += k
+        self.property[hotel.value] -= k
