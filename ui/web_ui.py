@@ -76,6 +76,8 @@ class WebUI(BaseUI):
     def display_message(self, msg: str):
         with self.lock:
             self.messages.append(msg)
+            if len(self.messages) > 5:
+                self.messages.pop(0)
             self.game_state['messages'] = self.messages
 
     def display_property(self, player: PlayerState):

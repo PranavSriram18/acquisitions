@@ -79,7 +79,7 @@ class BankState:
         msg = f"Transaction valid!\n"
         return True, cost, msg
     
-    def grant_awards(self, players: List[PlayerState], hotel: Hotel, size):
+    def grant_awards(self, players: List[PlayerState], hotel: Hotel, size) -> str:
         """
         In the most common case, the player with the most shares of hotel
         receives a majority award, and the player with the 2nd most shares
@@ -97,7 +97,7 @@ class BankState:
         """
         ownership = [p.property[hotel.value] for p in players]
         ranking = sorted(zip(players, ownership), key=lambda x: -x[1])
-        msg = f"Granting awards for {hotel.name}.\n"
+        msg = f"\nGranting awards for {hotel.name}.\n"
         if ranking[0][1] == 0:
             msg += f"No shareholders of {hotel.name}"
             return msg  # Case 0
@@ -116,14 +116,14 @@ class BankState:
             for i in range(num_majority_holders):
                 ranking[i][0].money += bonus_per_winner
                 msg += f"{ranking[i][0].name}, "
-            return
+            return msg
         # Cases 2-4
-        msg += f"Awarding majority bonus to: {ranking[0][0].name}\n"
+        msg += f"Awarding majority bonus to: {ranking[0][0].name} \n"
         ranking[0][0].money += majority_bonus
         num_minority_holders = sum(1 for x in ranking if x[1] == ranking[1][1] and x[1] > 0)
         if num_minority_holders == 0:  # Case 2
             msg += f"No minority holders; awarding minority bonus " \
-                 f"to {ranking[0][0].name}"
+                 f"to {ranking[0][0].name} \n"
             ranking[0][0].money += minority_bonus
             return msg
         # Cases 3 and 4
@@ -173,24 +173,36 @@ class BankState:
 
     def tally_scores(
             self, players: List[PlayerState], hotel_sizes: List[int]) -> str:
+        msg = "Tallying final scores!\n"
         for (hotel, size) in zip(Hotel, hotel_sizes):
             if hotel.value < NUM_HOTELS:
-                self.liquidate_all(players, hotel, hotel_sizes[hotel.value])
-        msg = f"Final scores:\n "
+                msg += self.liquidate_all(players, hotel, hotel_sizes[hotel.value])
+        msg += f"Final scores:\n "
         scores = [p.money for p in players]
         rankings = sorted(zip(players, scores), key=lambda x: -x[1])
         for (player, money) in rankings:
             msg += f"{player.name}: {money} \n"
-        # TODO - handle ties
-        msg += f"The winner is: {rankings[0][0].name}. Congratulations!"
+        winners = [x[0].name for x in rankings if x[1] == x[0][1]]
+        if len(winners) == 1:
+            msg += f"The winner is: {winners[0]}. Congratulations!\n"
+        else:
+            msg += f"The winners are: {winners}. Congratulations!\n"
         return msg
 
     def liquidate_all(
-            self, players: List[PlayerState], hotel: Hotel, size: int):
-        self.grant_awards(players, hotel, size)
+            self, players: List[PlayerState], hotel: Hotel, size: int) -> str:
+        if not size:
+            return ""
+        msg = self.grant_awards(players, hotel, size)
+        msg += f"\nLiquidating assets for {hotel.name} \n"
         share_value = share_price(hotel, size)
+        msg += f"\nShare value is {share_value}"
         for player in players:
-            player.money += share_value * player.property[hotel.value]
+            n_shares = player.property[hotel.value]
+            liquidity = share_value * n_shares
+            msg += f"{player.name} has {n_shares}; liquid value is {liquidity} \n"
+            player.money += liquidity
+        return msg
 
     def transfer(self, player: PlayerState, hotel: Hotel, k: int):
         """
