@@ -7,6 +7,9 @@ from acquisitions.game_logic.board_state import *
 from acquisitions.ui.ui_interface import *
 
 class TextUI(BaseUI):
+    """ 
+    Basic terminal-based text UI used in testing. Not actively maintained.
+    """
     def run(self):
         print("Starting game!")
 
@@ -19,13 +22,6 @@ class TextUI(BaseUI):
 
     def display_message(self, msg: str):
         print(msg)
-
-    def display_property(self, player: PlayerState):
-        print(f"Propery for {player.name}: ")
-        for (hotel, num_shares) in zip(Hotel, player.property):
-            if num_shares > 0:
-                print(f"{hotel.name}: {num_shares}")
-        print(f"Cash: {player.money}")
 
     def display_event(self, player, tile, game_event):
         pass # TODO

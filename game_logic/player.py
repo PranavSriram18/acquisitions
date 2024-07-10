@@ -14,3 +14,10 @@ class PlayerState:
 
     def has_tile(self, tile: Tile) -> bool:
         return tile in self.tiles
+    
+    def property(self) -> str:
+        msg = f"Propery for {self.name}: "
+        for (hotel, num_shares) in zip(Hotel, self.property):
+            if num_shares > 0:
+                msg += f"{hotel.name}: {num_shares}"
+        print(f"Cash: {self.money}")

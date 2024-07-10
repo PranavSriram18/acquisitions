@@ -33,6 +33,7 @@
             text-align: center;
         }
     </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 </head>
 <body>
     <h1>Acquisitions</h1>
@@ -45,23 +46,48 @@
         let boardDimensions;
         let lastInputRequired = null;
 
-        function updateGameState() {
-            fetch('/get_game_state')
-                .then(response => response.json())
-                .then(data => {
-                    if (!boardDimensions) {
-                        boardDimensions = data.board_dimensions;
-                        setupBoardCSS(boardDimensions);
-                    }
-                    renderBoard(data.board);
-                    updateMessages(data.messages);
-                    
-                    // Only update user input if it's different from last time
-                    if (data.input_required && JSON.stringify(data.input_required) !== JSON.stringify(lastInputRequired)) {
-                        showUserInput(data.input_required);
-                        lastInputRequired = data.input_required;
-                    }
-                });
+        const socket = io()
+        const gameId = "{{ game_id }}";
+        const playerName = "{{ player_name }}";
+        connected = false;
+
+        socket.on('connect', () => {
+            if (!connected) {
+                connected = true;
+                socket.emit('join', {game_id: gameId, player: playerName});
+                // TODO get the player name from user input
+                document.getElementById('game-info').innerHTML += '<br>Connected to server';
+            }
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+        });
+
+        socket.on('game_update', (data) => {
+            console.log('Received game update: ', data)
+            updateGameState(data);
+        });
+
+        function updateGameState(data) {
+            console.log('In updateGameState');
+            if (data.board_dimensions && !boardDimensions) {
+                boardDimensions = data.board_dimensions;
+                setupBoardCSS(boardDimensions);
+            }
+            if (data.board) {
+                renderBoard(data.board);
+            }
+            updateMessages(data.messages);
+            
+            // TODO - Only update user input if it's different from last time
+            console.log("Checking if input required...")
+            if (data.type == 'input_required') {
+                console.log("calling showUserInput")
+                showUserInput(data);
+                lastInputRequired = data;
+            }
+            console.log("Done")
         }
 
         function setupBoardCSS(dimensions) {
@@ -96,21 +122,17 @@
         }
 
         function showUserInput(inputData) {
+            console.log("In showUserInput");
             const userInputDiv = document.getElementById('user-input');
             let html = '';
             let currentValue = '';
             
-            // If there's already a select element, save its current value
             const existingSelect = document.getElementById('input-select');
             if (existingSelect) {
                 currentValue = existingSelect.value;
             }
 
-            if (JSON.stringify(inputData) === JSON.stringify(lastInputRequired)) {
-                return; // Don't update if the input hasn't changed
-            }
-
-            if (inputData.type === 'tile') {
+            if (inputData.input_type === 'tile') {
                 html = `<p>${inputData.player}, select a tile:</p>
                         <select id="input-select">
                             ${inputData.available_tiles.map(tile => 
@@ -118,7 +140,7 @@
                             ).join('')}
                         </select>
                         <button id="submit-button">Submit</button>`;
-            } else if (inputData.type === 'hotel') {
+            } else if (inputData.input_type === 'hotel') {
                 html = `<p>${inputData.player}, select a hotel:</p>
                         <select id="input-select">
                             ${inputData.available_hotels.map(hotel => 
@@ -126,7 +148,7 @@
                             ).join('')}
                         </select>
                         <button id="submit-button">Submit</button>`;
-            } else if (inputData.type === 'buy_order') {
+            } else if (inputData.input_type === 'buy_order') {
                 html = `<p>${inputData.player}, enter buy order:</p>
                         <form id="buy-order-form">
                             ${inputData.available_hotels.map(hotel => {
@@ -136,7 +158,7 @@
                             }).join('')}
                             <button type="button" id="submit-button">Submit</button>
                         </form>`;
-            } else if (inputData.type === 'liquidation') {
+            } else if (inputData.input_type === 'liquidation') {
                 html = `<p>${inputData.player}, enter liquidation options for ${inputData.num_shares} shares:</p>
                         <form id="liquidation-form">
                             <label>Sell: <input type="number" id="sell-input" name="sell" min="0" max="${inputData.num_shares}" value="0"></label><br>
@@ -144,13 +166,11 @@
                             <button type="button" id="submit-button">Submit</button>
                         </form>`;
             }
-            document.getElementById('user-input').innerHTML = html;
-            console.log("Generated HTML:", html);
             userInputDiv.innerHTML = html;
+            console.log("Generated HTML:", html);
 
-            // Add event listener to the submit button
             document.getElementById('submit-button').addEventListener('click', function() {
-                submitInput(inputData.type);
+                submitInput(inputData.input_type);
             });
 
             lastInputRequired = inputData;
@@ -201,22 +221,10 @@
 
             console.log('Submitting data:', data);
 
-            fetch('/make_move', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            })
-            .then(response => response.json())
-            .then(responseData => {
-                console.log('Move submitted:', responseData);
-                document.getElementById('user-input').innerHTML = '';
-                lastInputRequired = null;  // Reset lastInputRequired
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-            });
+            socket.emit('make_move', {game_id: gameId, move: data});
+
+            document.getElementById('user-input').innerHTML = '';
+            lastInputRequired = null;  // Reset lastInputRequired
         }
 
         function getHotelColor(hotel) {
@@ -233,10 +241,9 @@
         }
 
         function updateMessages(messages) {
+            if (!Array.isArray(messages)) return;
             document.getElementById('game-info').innerHTML = messages.join('<br>');
         }
-
-        setInterval(updateGameState, 500);
     </script>
 </body>
 </html>

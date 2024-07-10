@@ -7,20 +7,17 @@ from acquisitions.game_logic.tile import *
 
 class CellState:
     """
+    Represents the state of an individual tile on the Board.
     There are 4 basic types of state a cell can be in:
     0. Unoccupied
     1. Occupied, and not a part of any hotel
     2. Occupied, and part of one of the 7 types of hotels
-    3. Occupied, and part of a Dead Zone 
-    
-    self.occupied is True in all cases except Case 0
-    self.hotel is NO_HOTEL in all cases except case 2
-    self.dead_zone is False in all cases except case 3
+    3. Occupied, and part of a Dead Zone
     """
     def __init__(self, occupied=False, hotel=Hotel.NO_HOTEL, dead_zone=False, tile=None):
-        self.occupied = occupied
-        self.hotel = hotel
-        self.dead_zone = dead_zone
+        self.occupied = occupied  # True in all cases except Case 0
+        self.hotel = hotel  # NO_HOTEL in all cases except Case 2
+        self.dead_zone = dead_zone  # False in all cases except Case 3
         self.tile = tile
 
     def __str__(self):
@@ -38,6 +35,11 @@ class CellState:
         
 
 class BoardState:
+    """
+    Maintains the state of the Board during the game.
+    The state of the Board is defined by a grid of CellStates, plus an 
+    auxiliary structure for tracking sizes of hotels on the board.
+    """
     def __init__(self):
         self.board = [[CellState(
             tile=Tile(r, c)) for c in range(NUM_COLS)] for r in range(NUM_ROWS)]
@@ -45,6 +47,7 @@ class BoardState:
 
     def place_tile(self, tile: Tile) -> GameEvent:
         """
+        Core update to board state that occurs once per turn.
         pre: tile must be a valid Tile that hasn't been placed before.
         There are 4 cases:
         0. Isolated tile (all neighbors empty or dead)
@@ -59,22 +62,32 @@ class BoardState:
         cell.occupied = True
         if num_neighbor_hotels == 0:
             if not any(nc.occupied and not nc.dead_zone for nc in neighbor_cells):
-                return GameEvent.NOOP  # case 0
+                return GameEvent.NOOP  # Case 0
             else:
-                return GameEvent.START_CHAIN  # case 1
+                return GameEvent.START_CHAIN  # Case 1
         elif num_neighbor_hotels == 1:
             self.mark_recursive(tile, neighbor_hotels[0])
-            return GameEvent.JOIN_CHAIN  # case 2
+            return GameEvent.JOIN_CHAIN  # Case 2
         else:
-            return GameEvent.MERGER  # case 3
+            return GameEvent.MERGER  # Case 3
         
     def hotels_on_board(self) -> List[Hotel]:
+        """Returns a list of hotels present on the Board."""
         return [h for h in Hotel if h.value < NUM_HOTELS and self.hotel_sizes[h.value] > 0]
             
     def available_hotels(self) -> List[Hotel]:
+        """Returns a list of hotels not present on the Board."""
         return [h for h in Hotel if h.value < NUM_HOTELS and self.hotel_sizes[h.value] == 0]
     
     def check_merger(self, tile: Tile) -> Tuple[bool, List[Hotel], List[Hotel]]:
+        """
+        Checks if a given Tile causes a merger between two or more hotels.
+        Returns:
+        can_merge: Whether a merger is caused
+        majority_options: Which of the merged hotels is larger (can be multiple
+        in case of a tie)
+        neighbor_hotels: The Hotels in neighboring Tiles
+        """
         neighbor_hotels = self.get_neighbor_hotels(tile)
         sizes = [self.hotel_sizes[nh.value] for nh in neighbor_hotels]
         can_merge = sizes[1] <= MAX_MERGEABLE_SIZE
@@ -131,6 +144,10 @@ class BoardState:
         return [self.cell(nt) for nt in self.get_neighbor_tiles(tile)]
     
     def get_neighbor_hotels(self, tile: Tile) -> List[Hotel]:
+        """
+        Returns a list of hotels neighboring the given Tile, in descending 
+        order of size.
+        """
         neighbor_cells = self.get_neighbor_cells(tile)
         neighbor_hotels = list(set(c.hotel for c in neighbor_cells if c.hotel != Hotel.NO_HOTEL))
         neighbor_hotels.sort(key=lambda x: -self.hotel_sizes[x.value])
